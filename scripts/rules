@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+# vi:set ft=python :
+
+"""rules version 0.1.0 (2024-05-22)
+Inspect or validate the rules.yaml file.
+
+Usage:
+    rules list [--file FILE]
+    rules show [--file FILE] RULE
+    rules validate [--file FILE] [--schema SCHEMA_FILE]
+    rules --help | --version
+
+Input:
+  names
+
+Output:
+  Show summarized information about antidot's rules.yaml file.
+
+Options:
+  -f FILE, --file FILE  rules file [default: ./rules.yaml]
+  --schema SCHEMA_FILE  file with rules' schema [default: ./rules.schema.yaml]
+
+  -h --help             show this help message
+  --version             show program version
+"""
+
+
+from dataclasses import dataclass
+
+import yaml
+
+
+@dataclass
+class Rule(yaml.YAMLObject):
+    name: str
+    dotfile: dict
+    actions: list[dict]
+    description: str = None
+    notes: list[str] = None
+
+
+def main(arg):
+
+    with open(arg['file']) as file:
+        data = yaml.load(file, yaml.Loader)
+    rules = {rule['name']: Rule(**rule) for rule in data['rules']}
+
+    if arg['list']:
+        import itertools
+        import os
+        col_width = 2 + max(len(s) for s in rules.keys())
+        names = sorted(f"{name:{col_width}}" for name in (rules.keys()))
+        n_col = max(1, os.get_terminal_size().columns // col_width)
+        n_row = 1 + len(rules) // n_col
+
+        for cols in itertools.zip_longest(
+                *(names[i * n_row:min((i + 1) * n_row, len(names))]
+                    for i in range(n_col)),
+                fillvalue=''):
+            print(*cols)
+
+    elif arg['show']:
+        import pprint
+        pprint.pprint(rules[arg['rule']])
+
+    elif arg['validate']:
+        import jsonschema
+        with open(arg['schema']) as file:
+            schema = yaml.load(file, yaml.Loader)
+        jsonschema.validate(data, schema)
+
+
+if __name__ == '__main__':
+    import docopt
+    arg = {key.lower().strip('-').replace('-', '_'): val
+           for key, val in docopt.docopt(__doc__, version="0.1.0").items()}
+    main(arg)
